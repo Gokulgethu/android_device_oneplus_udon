@@ -170,6 +170,56 @@ TARGET_KERNEL_SOURCE ?= kernel/oneplus/sm8475
 TARGET_KERNEL_CONFIG := vendor/taro-qgki_defconfig
 TARGET_KERNEL_NO_GCC := true
 
+# ----------------------------------------------------------------------------
+# LineageOS-style kernel-header soong generator variables
+#
+# vendor/lineage/build/soong/Android.bp defines the generated_kernel_includes
+# and prebuilt_kernel_includes genrules. Their command is expanded through the
+# "lineageVarsPlugin" soong namespace, which on LineageOS itself is populated by
+# vendor/lineage/config/BoardConfigKernel.mk + BoardConfigSoong.mk (included via
+# BoardConfigLineage.mk only when LINEAGE_BUILD is set, i.e. for lunch targets
+# whose name starts with "lineage_").
+#
+# Non-Lineage-prefixed ROM targets (crdroid_, aosp_, evolution_, rising_,
+# pixelos_, matrixx_, derp_, bliss_, ...) never set LINEAGE_BUILD, so those
+# variables are never registered in the namespace and soong aborts with:
+#   module "prebuilt_kernel_includes":  cmd: unknown variable '$(KERNEL_BUILD_OUT_PREFIX)'
+#   module "generated_kernel_includes": cmd: unknown variable '$(TARGET_KERNEL_PLATFORM_TARGET)'
+#
+# Defining/registering them here makes the header genrules resolve on *any*
+# custom ROM without depending on the ROM's build system. This device builds
+# its kernel the classic "make" way (no bazel GKI platform target), so
+# TARGET_KERNEL_PLATFORM_TARGET is intentionally empty.
+# ----------------------------------------------------------------------------
+KERNEL_ARCH ?= arm64
+KERNEL_MAKE_CMD ?= $(abspath .)/prebuilts/build-tools/$(HOST_PREBUILT_TAG)/bin/make
+# Empty when the soong gen dir ($(genDir)) is already absolute, exactly how the
+# in-tree kernel build wants its O= argument.
+KERNEL_BUILD_OUT_PREFIX ?=
+# Classic "make" kernel build: no bazel GKI platform target, no cross-compile /
+# extra make flags / host PATH override needed for the header genrule.
+TARGET_KERNEL_PLATFORM_TARGET ?=
+KERNEL_CROSS_COMPILE ?=
+KERNEL_MAKE_FLAGS ?=
+KERNEL_PATH ?=
+PATH_OVERRIDE_SOONG ?=
+
+# Register every variable the kernel-header genrules expand (mirrors the
+# EXPORT_TO_SOONG list in vendor/lineage/config/BoardConfigSoong.mk). On
+# LineageOS these are overwritten by BoardConfigSoong.mk with the ROM's own
+# values; on every other ROM they populate the namespace with our defaults.
+$(call soong_config_set,lineageVarsPlugin,KERNEL_ARCH,$(KERNEL_ARCH))
+$(call soong_config_set,lineageVarsPlugin,KERNEL_BUILD_OUT_PREFIX,$(KERNEL_BUILD_OUT_PREFIX))
+$(call soong_config_set,lineageVarsPlugin,KERNEL_CROSS_COMPILE,$(KERNEL_CROSS_COMPILE))
+$(call soong_config_set,lineageVarsPlugin,KERNEL_MAKE_CMD,$(KERNEL_MAKE_CMD))
+$(call soong_config_set,lineageVarsPlugin,KERNEL_MAKE_FLAGS,$(KERNEL_MAKE_FLAGS))
+$(call soong_config_set,lineageVarsPlugin,KERNEL_PATH,$(KERNEL_PATH))
+$(call soong_config_set,lineageVarsPlugin,PATH_OVERRIDE_SOONG,$(PATH_OVERRIDE_SOONG))
+$(call soong_config_set,lineageVarsPlugin,TARGET_KERNEL_CONFIG,$(TARGET_KERNEL_CONFIG))
+$(call soong_config_set,lineageVarsPlugin,TARGET_KERNEL_SOURCE,$(TARGET_KERNEL_SOURCE))
+$(call soong_config_set,lineageVarsPlugin,TARGET_KERNEL_PLATFORM_TARGET,$(TARGET_KERNEL_PLATFORM_TARGET))
+$(call soong_config_set,lineageVarsPlugin,TARGET_PREBUILT_KERNEL_HEADERS,$(TARGET_PREBUILT_KERNEL_HEADERS))
+
 # Kernel modules (Safe wildcards preventing missing file errors)
 BOARD_VENDOR_KERNEL_MODULES_BLOCKLIST_FILE := $(wildcard $(COMMON_PATH)/modules.blocklist)
 BOARD_VENDOR_KERNEL_MODULES_LOAD := $(if $(wildcard $(COMMON_PATH)/modules.load),$(strip $(shell cat $(COMMON_PATH)/modules.load)),)
